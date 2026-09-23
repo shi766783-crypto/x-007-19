@@ -4,14 +4,20 @@ import { useShoppingListStore } from '@/stores/shoppingList'
 import { useMealPlanStore } from '@/stores/mealPlan'
 import BaseButton from '@/components/common/BaseButton.vue'
 import BaseEmpty from '@/components/common/BaseEmpty.vue'
+import BaseModal from '@/components/common/BaseModal.vue'
 
 const shopping = useShoppingListStore()
 const mealPlan = useMealPlanStore()
 
 const selected = ref(new Set())
+const showExport = ref(false)
+const copied = ref(false)
 
 const active = computed(() => shopping.activeItems)
 const purchased = computed(() => shopping.purchasedItems)
+const exportText = computed(() => shopping.exportText)
+
+const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }
 
 function toggle(id) {
   const s = new Set(selected.value)
@@ -39,6 +45,48 @@ function markAll() {
   if (n) alert(`已采购并入库全部 ${n} 种食材 ✅`)
 }
 
+async function copyText() {
+  const text = exportText.value
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    // 非安全上下文（如 http 局域网访问）时回退到手动复制
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    if (!ok) {
+      alert('复制失败，请长按文本框手动选择复制')
+      return
+    }
+  }
+  copied.value = true
+  setTimeout(() => (copied.value = false), 1500)
+}
+
+function printText() {
+  const win = window.open('', '_blank')
+  if (!win) {
+    alert('无法打开打印窗口，请检查浏览器弹窗设置')
+    return
+  }
+  const body = exportText.value
+    .split('\n')
+    .map((line) => `<div>${line.replace(/[&<>"]/g, (c) => ESC[c])}</div>`)
+    .join('')
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>采购清单</title>
+    <style>
+      body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; padding: 32px; font-size: 16px; line-height: 2; }
+      div:first-child { font-weight: 600; font-size: 18px; margin-bottom: 8px; }
+      div:last-child { margin-top: 12px; color: #666; font-size: 14px; }
+    </style></head><body>${body}<script>window.onload=()=>{window.print()}<\/script></body></html>`)
+  win.document.close()
+}
+
 function fmtDate(iso) {
   const d = new Date(iso)
   return `${d.getMonth() + 1}月${d.getDate()}日`
@@ -59,6 +107,7 @@ function fmtDate(iso) {
         标记已采购（{{ selected.size }}）
       </BaseButton>
       <BaseButton size="sm" variant="ghost" @click="markAll">全部标记已采购并入库</BaseButton>
+      <BaseButton size="sm" variant="ghost" @click="showExport = true">📋 导出清单</BaseButton>
     </div>
 
     <BaseEmpty v-if="!active.length && !purchased.length" emoji="🛒" text="暂无采购清单，点击上方按钮生成" />
@@ -97,6 +146,15 @@ function fmtDate(iso) {
         </div>
       </div>
     </div>
+
+    <BaseModal :show="showExport" title="导出采购清单" @close="showExport = false">
+      <p class="muted small export-tip">文本只包含待采购食材的名称、数量和单位，复制后可直接发到家庭群，清单内容不会被修改。</p>
+      <textarea class="export-area" readonly :value="exportText" rows="10" @focus="($event) => $event.target.select()"></textarea>
+      <template #footer>
+        <BaseButton variant="ghost" size="sm" @click="printText">🖨 打印</BaseButton>
+        <BaseButton size="sm" @click="copyText">{{ copied ? '已复制 ✅' : '复制全文' }}</BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -117,6 +175,21 @@ function fmtDate(iso) {
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
+}
+.export-tip {
+  margin: 0 0 10px;
+}
+.export-area {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.8;
+  resize: vertical;
+  background: var(--surface-2);
+  color: var(--text);
 }
 .small {
   font-size: 12px;

@@ -7,6 +7,11 @@ import { useMealPlanStore } from './mealPlan'
 const LIST_KEY = 'shopping-list'
 const HISTORY_KEY = 'shopping-history'
 
+// 数量展示：去掉计算产生的小数尾零（如 2.5 保留、2.0 显示为 2）
+function formatQty(value) {
+  return String(Number(value || 0))
+}
+
 export const useShoppingListStore = defineStore('shoppingList', {
   state: () => ({
     items: read(LIST_KEY, []),
@@ -33,6 +38,19 @@ export const useShoppingListStore = defineStore('shoppingList', {
     // 缺口总额（未采购项）
     totalGap: (state) =>
       state.items.filter((i) => !i.purchased).reduce((s, i) => s + Number(i.gap || 0), 0),
+    // 待采购清单的可分享纯文本（只读取，不改变清单）
+    exportText() {
+      const items = this.activeItems
+      if (!items.length) return ''
+      const now = new Date()
+      const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`
+      const lines = [
+        `【采购清单】${dateStr}`,
+        ...items.map((i, idx) => `${idx + 1}. ${i.name} ${formatQty(i.gap)}${i.unit}`),
+        `共 ${items.length} 种食材`,
+      ]
+      return lines.join('\n')
+    },
   },
 
   actions: {
