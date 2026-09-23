@@ -4,11 +4,15 @@ import { useShoppingListStore } from '@/stores/shoppingList'
 import { useMealPlanStore } from '@/stores/mealPlan'
 import BaseButton from '@/components/common/BaseButton.vue'
 import BaseEmpty from '@/components/common/BaseEmpty.vue'
+import BaseModal from '@/components/common/BaseModal.vue'
 
 const shopping = useShoppingListStore()
 const mealPlan = useMealPlanStore()
 
 const selected = ref(new Set())
+const showExport = ref(false)
+const copied = ref(false)
+const exportTextarea = ref(null)
 
 const active = computed(() => shopping.activeItems)
 const purchased = computed(() => shopping.purchasedItems)
@@ -43,6 +47,29 @@ function fmtDate(iso) {
   const d = new Date(iso)
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
+
+function openExport() {
+  copied.value = false
+  showExport.value = true
+}
+
+async function copyExport() {
+  const text = shopping.exportText
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      // 降级：选中文本后使用 execCommand
+      exportTextarea.value?.select()
+      document.execCommand('copy')
+    }
+    copied.value = true
+    setTimeout(() => (copied.value = false), 1500)
+  } catch {
+    exportTextarea.value?.select()
+    alert('复制失败，请长按文本手动复制')
+  }
+}
 </script>
 
 <template>
@@ -59,6 +86,7 @@ function fmtDate(iso) {
         标记已采购（{{ selected.size }}）
       </BaseButton>
       <BaseButton size="sm" variant="ghost" @click="markAll">全部标记已采购并入库</BaseButton>
+      <BaseButton size="sm" variant="ghost" @click="openExport">📋 导出清单</BaseButton>
     </div>
 
     <BaseEmpty v-if="!active.length && !purchased.length" emoji="🛒" text="暂无采购清单，点击上方按钮生成" />
@@ -97,6 +125,21 @@ function fmtDate(iso) {
         </div>
       </div>
     </div>
+
+    <BaseModal :show="showExport" title="导出采购清单" @close="showExport = false">
+      <p class="muted small">复制后可发到家庭群或打印，导出不改变清单内容。</p>
+      <textarea
+        ref="exportTextarea"
+        class="export-text"
+        readonly
+        :value="shopping.exportText"
+        rows="8"
+      ></textarea>
+      <template #footer>
+        <BaseButton variant="ghost" @click="showExport = false">关闭</BaseButton>
+        <BaseButton @click="copyExport">{{ copied ? '已复制 ✓' : '复制文本' }}</BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -177,5 +220,17 @@ function fmtDate(iso) {
 .total {
   font-weight: 600;
   color: var(--primary-dark);
+}
+.export-text {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.8;
+  resize: vertical;
+  background: var(--surface-2);
+  color: var(--text);
+  box-sizing: border-box;
 }
 </style>

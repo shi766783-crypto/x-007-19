@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { read, write } from '@/utils/storage'
 import { uid } from '@/utils/id'
+import { formatDate, toDateKey } from '@/utils/date'
 import { useInventoryStore } from './inventory'
 import { useMealPlanStore } from './mealPlan'
 
@@ -33,6 +34,17 @@ export const useShoppingListStore = defineStore('shoppingList', {
     // 缺口总额（未采购项）
     totalGap: (state) =>
       state.items.filter((i) => !i.purchased).reduce((s, i) => s + Number(i.gap || 0), 0),
+    // 待采购清单的可复制文本（仅读取，不修改清单）
+    exportText() {
+      const items = this.activeItems
+      if (!items.length) return ''
+      const lines = items.map((i, idx) => `${idx + 1}. ${i.name} ${i.gap}${i.unit}`)
+      return [
+        `🛒 采购清单（${formatDate(toDateKey())}）`,
+        ...lines,
+        `共 ${items.length} 种食材`,
+      ].join('\n')
+    },
   },
 
   actions: {
